@@ -64,21 +64,44 @@ func tcpLocal(addr, server string, shadow func(net.Conn) net.Conn, getAddr func(
 				return
 			}
 
-			rc, err := net.Dial("tcp", server)
-			if err != nil {
-				logf("failed to connect to server %v: %v", server, err)
-				return
-			}
-			defer rc.Close()
-			rc.(*net.TCPConn).SetKeepAlive(true)
-			rc = shadow(rc)
-
-			if _, err = rc.Write(tgt); err != nil {
-				logf("failed to send target address: %v", err)
-				return
+			var isAddrBlocked = false
+			if blackAddr != nil {
+				addr := tgt.Addr()
+				if blackAddr.Find(reverse(addr)) {
+					logf("found blocked addr: %s", addr)
+					isAddrBlocked = true
+				}
 			}
 
-			logf("proxy %s <-> %s <-> %s", c.RemoteAddr(), server, tgt)
+			var rc net.Conn
+
+			if !isAddrBlocked {
+				logf("try to direct dial %s <-> %s", c.RemoteAddr(), tgt)
+				rc, err = net.DialTimeout("tcp", tgt.String(), 800*time.Millisecond)
+				if err == nil {
+					logf("proxy %s <-> %s", c.RemoteAddr(), tgt)
+				} else {
+					logf("remember failed address: %s", tgt)
+				}
+			}
+
+			if rc == nil {
+				rc, err = net.Dial("tcp", server)
+				if err != nil {
+					logf("failed to connect to server %v: %v", server, err)
+					return
+				}
+				defer rc.Close()
+				rc.(*net.TCPConn).SetKeepAlive(true)
+				rc = shadow(rc)
+
+				if _, err = rc.Write(tgt); err != nil {
+					logf("failed to send target address: %v", err)
+					return
+				}
+				logf("proxy %s <-> %s <-> %s", c.RemoteAddr(), server, tgt)
+			}
+
 			_, _, err = relay(rc, c)
 			if err != nil {
 				if err, ok := err.(net.Error); ok && err.Timeout() {

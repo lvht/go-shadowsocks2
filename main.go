@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/rand"
 	"encoding/base64"
 	"flag"
@@ -31,6 +32,8 @@ func logf(f string, v ...interface{}) {
 	}
 }
 
+var blackAddr *Trie
+
 func main() {
 
 	var flags struct {
@@ -46,6 +49,7 @@ func main() {
 		TCPTun    string
 		UDPTun    string
 		UDPSocks  bool
+		BlackList string
 	}
 
 	flag.BoolVar(&config.Verbose, "verbose", false, "verbose mode")
@@ -62,6 +66,7 @@ func main() {
 	flag.StringVar(&flags.TCPTun, "tcptun", "", "(client-only) TCP tunnel (laddr1=raddr1,laddr2=raddr2,...)")
 	flag.StringVar(&flags.UDPTun, "udptun", "", "(client-only) UDP tunnel (laddr1=raddr1,laddr2=raddr2,...)")
 	flag.DurationVar(&config.UDPTimeout, "udptimeout", 5*time.Minute, "UDP tunnel timeout")
+	flag.StringVar(&flags.BlackList, "blacklist", "", "(client-only) address blacklist")
 	flag.Parse()
 
 	if flags.Keygen > 0 {
@@ -90,6 +95,12 @@ func main() {
 		cipher := flags.Cipher
 		password := flags.Password
 		var err error
+
+		if flags.BlackList != "" {
+			if err := initBlackList(flags.BlackList); err != nil {
+				log.Fatal(err)
+			}
+		}
 
 		if strings.HasPrefix(addr, "ss://") {
 			addr, cipher, password, err = parseURL(addr)
@@ -173,4 +184,21 @@ func parseURL(s string) (addr, cipher, password string, err error) {
 		password, _ = u.User.Password()
 	}
 	return
+}
+
+func initBlackList(path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	blackAddr = NewTrie()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		addr := scanner.Text()
+		blackAddr.Add(reverse(addr))
+	}
+
+	return nil
 }

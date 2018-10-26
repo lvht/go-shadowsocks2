@@ -69,6 +69,22 @@ func (a Addr) String() string {
 	return net.JoinHostPort(host, port)
 }
 
+// Addr return the address without port
+func (a Addr) Addr() string {
+	var host string
+
+	switch a[0] { // address type
+	case AtypDomainName:
+		host = string(a[2 : 2+int(a[1])])
+	case AtypIPv4:
+		host = net.IP(a[1 : 1+net.IPv4len]).String()
+	case AtypIPv6:
+		host = net.IP(a[1 : 1+net.IPv6len]).String()
+	}
+
+	return host
+}
+
 func readAddr(r io.Reader, b []byte) (Addr, error) {
 	if len(b) < MaxAddrLen {
 		return nil, io.ErrShortBuffer
