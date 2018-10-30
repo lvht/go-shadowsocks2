@@ -50,6 +50,7 @@ func main() {
 		UDPTun    string
 		UDPSocks  bool
 		BlackList string
+		GFWList   string
 	}
 
 	flag.BoolVar(&config.Verbose, "verbose", false, "verbose mode")
@@ -67,6 +68,7 @@ func main() {
 	flag.StringVar(&flags.UDPTun, "udptun", "", "(client-only) UDP tunnel (laddr1=raddr1,laddr2=raddr2,...)")
 	flag.DurationVar(&config.UDPTimeout, "udptimeout", 5*time.Minute, "UDP tunnel timeout")
 	flag.StringVar(&flags.BlackList, "blacklist", "", "(client-only) address blacklist")
+	flag.StringVar(&flags.GFWList, "gfwlist", "", "(client-only) address blacklist from gfwlist")
 	flag.Parse()
 
 	if flags.Keygen > 0 {
@@ -98,6 +100,12 @@ func main() {
 
 		if flags.BlackList != "" {
 			if err := initBlackList(flags.BlackList); err != nil {
+				log.Fatal(err)
+			}
+		}
+
+		if flags.GFWList != "" {
+			if err := initGFWList(); err != nil {
 				log.Fatal(err)
 			}
 		}
@@ -193,10 +201,31 @@ func initBlackList(path string) error {
 	}
 	defer file.Close()
 
-	blackAddr = NewTrie()
+	if blackAddr == nil {
+		blackAddr = NewTrie()
+	}
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		addr := scanner.Text()
+		blackAddr.Add(reverse(addr))
+	}
+
+	return nil
+}
+
+func initGFWList() error {
+	logf("Downloading gfwlist...")
+	addrs, err := FetchBlockedAddrs()
+	logf("Fetched %d addrs from gfwlist", len(addrs))
+	if err != nil {
+		return err
+	}
+
+	if blackAddr == nil {
+		blackAddr = NewTrie()
+	}
+
+	for _, addr := range addrs {
 		blackAddr.Add(reverse(addr))
 	}
 
