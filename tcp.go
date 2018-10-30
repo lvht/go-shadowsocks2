@@ -41,8 +41,6 @@ func tcpLocal(addr, server string, shadow func(net.Conn) net.Conn, getAddr func(
 		}
 
 		go func() {
-			defer c.Close()
-			c.(*net.TCPConn).SetKeepAlive(true)
 			tgt, err := getAddr(c)
 			if err != nil {
 
@@ -64,53 +62,66 @@ func tcpLocal(addr, server string, shadow func(net.Conn) net.Conn, getAddr func(
 				return
 			}
 
-			var isAddrBlocked = false
-			if blackAddr != nil {
-				addr := tgt.Addr()
-				if blackAddr.Find(reverse(addr)) {
-					logf("found blocked addr: %s", addr)
-					isAddrBlocked = true
-				}
-			}
-
-			var rc net.Conn
-
-			if !isAddrBlocked {
-				logf("try to direct dial %s <-> %s", c.RemoteAddr(), tgt)
-				rc, err = net.DialTimeout("tcp", tgt.String(), 800*time.Millisecond)
-				if err == nil {
-					logf("proxy %s <-> %s", c.RemoteAddr(), tgt)
-				} else {
-					logf("remember failed address: %s", tgt)
-				}
-			}
-
-			if rc == nil {
-				rc, err = net.Dial("tcp", server)
-				if err != nil {
-					logf("failed to connect to server %v: %v", server, err)
-					return
-				}
-				defer rc.Close()
-				rc.(*net.TCPConn).SetKeepAlive(true)
-				rc = shadow(rc)
-
-				if _, err = rc.Write(tgt); err != nil {
-					logf("failed to send target address: %v", err)
-					return
-				}
-				logf("proxy %s <-> %s <-> %s", c.RemoteAddr(), server, tgt)
-			}
-
-			_, _, err = relay(rc, c)
-			if err != nil {
-				if err, ok := err.(net.Error); ok && err.Timeout() {
-					return // ignore i/o timeout
-				}
-				logf("relay error: %v", err)
-			}
+			dialss(c, tgt.String(), server, shadow, func(c net.Conn) error {
+				_, err := c.Write(tgt)
+				return err
+			})
+			return
 		}()
 	}
+}
+
+func dialss(c net.Conn, tgt string, server string, shadow func(net.Conn) net.Conn, onConn func(c net.Conn) error) (err error) {
+	defer c.Close()
+	c.(*net.TCPConn).SetKeepAlive(true)
+
+	host, _, _ := net.SplitHostPort(tgt)
+	var isAddrBlocked = false
+	if blackAddr.Find(reverse(host)) {
+		logf("found blocked addr: %s", tgt)
+		isAddrBlocked = true
+	}
+
+	var rc net.Conn
+
+	if !isAddrBlocked {
+		logf("try to direct dial %s <-> %s", c.RemoteAddr(), tgt)
+		rc, err = net.DialTimeout("tcp", tgt, 800*time.Millisecond)
+		if err == nil {
+			logf("proxy %s <-> %s", c.RemoteAddr(), tgt)
+		} else {
+			logf("remember failed address: %s", tgt)
+			blackAddr.Add(reverse(host))
+		}
+	}
+
+	if rc == nil {
+		rc, err = net.Dial("tcp", server)
+		if err != nil {
+			logf("failed to connect to server %v: %v", server, err)
+			return
+		}
+		defer rc.Close()
+		rc.(*net.TCPConn).SetKeepAlive(true)
+		rc = shadow(rc)
+
+		if onConn != nil {
+			if err = onConn(rc); err != nil {
+				logf("failed to send target address: %v", err)
+				return
+			}
+		}
+		logf("proxy %s <-> %s <-> %s", c.RemoteAddr(), server, tgt)
+	}
+
+	_, _, err = relay(rc, c)
+	if err != nil {
+		if err, ok := err.(net.Error); ok && err.Timeout() {
+			return nil
+		}
+		logf("relay error: %v", err)
+	}
+	return
 }
 
 // Listen on addr for incoming connections.

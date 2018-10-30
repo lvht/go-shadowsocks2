@@ -28,6 +28,10 @@ func NewTrie() *Trie {
 
 // Add adds the key to the Trie.
 func (t *Trie) Add(key string) bool {
+	if t == nil {
+		return false
+	}
+
 	rwm.Lock()
 	defer rwm.Unlock()
 
@@ -48,6 +52,10 @@ func (t *Trie) Add(key string) bool {
 
 // Find meta data associated with `key`.
 func (t *Trie) Find(key string) bool {
+	if t == nil {
+		return false
+	}
+
 	rwm.RLock()
 	defer rwm.RUnlock()
 
