@@ -69,7 +69,7 @@ func main() {
 	flag.StringVar(&flags.TCPTun, "tcptun", "", "(client-only) TCP tunnel (laddr1=raddr1,laddr2=raddr2,...)")
 	flag.StringVar(&flags.UDPTun, "udptun", "", "(client-only) UDP tunnel (laddr1=raddr1,laddr2=raddr2,...)")
 	flag.DurationVar(&config.UDPTimeout, "udptimeout", 5*time.Minute, "UDP tunnel timeout")
-	flag.StringVar(&flags.BlackList, "blacklist", "", "(client-only) address blacklist")
+	flag.StringVar(&flags.BlackList, "blacklist", "", "(client-only) address blacklist file")
 	flag.StringVar(&flags.GFWList, "gfwlist", "", "(client-only) address blacklist from gfwlist")
 	flag.Parse()
 
