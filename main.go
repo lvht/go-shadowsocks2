@@ -44,6 +44,7 @@ func main() {
 		Password  string
 		Keygen    int
 		Socks     string
+		HTTP      string
 		RedirTCP  string
 		RedirTCP6 string
 		TCPTun    string
@@ -62,6 +63,7 @@ func main() {
 	flag.StringVar(&flags.Client, "c", "", "client connect address or url")
 	flag.StringVar(&flags.Socks, "socks", "", "(client-only) SOCKS listen address")
 	flag.BoolVar(&flags.UDPSocks, "u", false, "(client-only) Enable UDP support for SOCKS")
+	flag.StringVar(&flags.HTTP, "http", "", "(client-only) HTTP listen address")
 	flag.StringVar(&flags.RedirTCP, "redir", "", "(client-only) redirect TCP from this address")
 	flag.StringVar(&flags.RedirTCP6, "redir6", "", "(client-only) redirect TCP IPv6 from this address")
 	flag.StringVar(&flags.TCPTun, "tcptun", "", "(client-only) TCP tunnel (laddr1=raddr1,laddr2=raddr2,...)")
@@ -100,13 +102,13 @@ func main() {
 
 		if flags.BlackList != "" {
 			if err := initBlackList(flags.BlackList); err != nil {
-				log.Fatal(err)
+				logf(err.Error())
 			}
 		}
 
 		if flags.GFWList != "" {
 			if err := initGFWList(); err != nil {
-				log.Fatal(err)
+				logf(err.Error())
 			}
 		}
 
@@ -142,6 +144,10 @@ func main() {
 			if flags.UDPSocks {
 				go udpSocksLocal(flags.Socks, addr, ciph.PacketConn)
 			}
+		}
+
+		if flags.HTTP != "" {
+			go httpLocal(flags.HTTP, addr, ciph.StreamConn)
 		}
 
 		if flags.RedirTCP != "" {

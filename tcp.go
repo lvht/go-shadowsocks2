@@ -62,8 +62,11 @@ func tcpLocal(addr, server string, shadow func(net.Conn) net.Conn, getAddr func(
 				return
 			}
 
-			dialss(c, tgt.String(), server, shadow, func(c net.Conn) error {
-				_, err := c.Write(tgt)
+			dialss(c, tgt.String(), server, shadow, func(c net.Conn, isDirect bool) error {
+				var err error
+				if !isDirect {
+					_, err = c.Write(tgt)
+				}
 				return err
 			})
 			return
@@ -71,7 +74,7 @@ func tcpLocal(addr, server string, shadow func(net.Conn) net.Conn, getAddr func(
 	}
 }
 
-func dialss(c net.Conn, tgt string, server string, shadow func(net.Conn) net.Conn, onConn func(c net.Conn) error) (err error) {
+func dialss(c net.Conn, tgt string, server string, shadow func(net.Conn) net.Conn, onConn func(c net.Conn, isDirect bool) error) (err error) {
 	defer c.Close()
 	c.(*net.TCPConn).SetKeepAlive(true)
 
@@ -83,6 +86,7 @@ func dialss(c net.Conn, tgt string, server string, shadow func(net.Conn) net.Con
 	}
 
 	var rc net.Conn
+	var isDirect = true
 
 	if !isAddrBlocked {
 		logf("try to direct dial %s <-> %s", c.RemoteAddr(), tgt)
@@ -105,13 +109,15 @@ func dialss(c net.Conn, tgt string, server string, shadow func(net.Conn) net.Con
 		rc.(*net.TCPConn).SetKeepAlive(true)
 		rc = shadow(rc)
 
-		if onConn != nil {
-			if err = onConn(rc); err != nil {
-				logf("failed to send target address: %v", err)
-				return
-			}
-		}
 		logf("proxy %s <-> %s <-> %s", c.RemoteAddr(), server, tgt)
+		isDirect = false
+	}
+
+	if onConn != nil {
+		if err = onConn(rc, isDirect); err != nil {
+			logf("failed to send target address: %v", err)
+			return
+		}
 	}
 
 	_, _, err = relay(rc, c)
