@@ -80,6 +80,10 @@ func main() {
 		return
 	}
 
+	if flags.Client == "" {
+		flags.Client = os.Getenv("SS_PROXY")
+	}
+
 	if flags.Client == "" && flags.Server == "" {
 		flag.Usage()
 		return
