@@ -80,12 +80,15 @@ func parseRequestLine(line string) (method, requestURI, proto string, ok bool) {
 }
 
 func httpLocal(addr, server string, shadow func(net.Conn) net.Conn) {
+	defer func() { c2 <- nil }()
+
+	logf("HTTP proxy %s <-> %s", addr, server)
+
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
-		logf("[http] failed to listen on %s: %v", addr, err)
+		logf(err.Error())
 		return
 	}
-	logf("HTTP proxy %s <-> %s", addr, server)
 
 	for {
 		c, err := l.Accept()

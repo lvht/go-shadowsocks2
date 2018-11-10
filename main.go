@@ -34,6 +34,13 @@ func logf(f string, v ...interface{}) {
 
 var blackAddr *Trie
 
+var c1, c2 chan error
+
+func init() {
+	c1 = make(chan error)
+	c2 = make(chan error)
+}
+
 func main() {
 
 	var flags struct {
@@ -86,6 +93,7 @@ func main() {
 
 	if flags.Client == "" && flags.Server == "" {
 		flag.Usage()
+		os.Exit(1)
 		return
 	}
 
@@ -103,18 +111,6 @@ func main() {
 		cipher := flags.Cipher
 		password := flags.Password
 		var err error
-
-		if flags.BlackList != "" {
-			if err := initBlackList(flags.BlackList); err != nil {
-				logf(err.Error())
-			}
-		}
-
-		if flags.GFWList != "" {
-			if err := initGFWList(); err != nil {
-				logf(err.Error())
-			}
-		}
 
 		if strings.HasPrefix(addr, "ss://") {
 			addr, cipher, password, err = parseURL(addr)
@@ -161,6 +157,20 @@ func main() {
 		if flags.RedirTCP6 != "" {
 			go redir6Local(flags.RedirTCP6, addr, ciph.StreamConn)
 		}
+
+		if flags.BlackList != "" {
+			if err := initBlackList(flags.BlackList); err != nil {
+				logf(err.Error())
+			}
+		}
+
+		if flags.GFWList != "" {
+			go func() {
+				if err := initGFWList(); err != nil {
+					logf(err.Error())
+				}
+			}()
+		}
 	}
 
 	if flags.Server != "" { // server mode
@@ -187,7 +197,12 @@ func main() {
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	<-sigCh
+
+	select {
+	case <-sigCh:
+	case <-c1:
+	case <-c2:
+	}
 }
 
 func parseURL(s string) (addr, cipher, password string, err error) {

@@ -10,6 +10,7 @@ import (
 
 // Create a SOCKS server listening on addr and proxy to server.
 func socksLocal(addr, server string, shadow func(net.Conn) net.Conn) {
+	defer func() { c1 <- nil }()
 	logf("SOCKS proxy %s <-> %s", addr, server)
 	tcpLocal(addr, server, shadow, func(c net.Conn) (socks.Addr, error) { return socks.Handshake(c) })
 }
@@ -29,7 +30,7 @@ func tcpTun(addr, server, target string, shadow func(net.Conn) net.Conn) {
 func tcpLocal(addr, server string, shadow func(net.Conn) net.Conn, getAddr func(net.Conn) (socks.Addr, error)) {
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
-		logf("failed to listen on %s: %v", addr, err)
+		logf(err.Error())
 		return
 	}
 
